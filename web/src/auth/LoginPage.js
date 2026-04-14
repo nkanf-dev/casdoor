@@ -326,7 +326,15 @@ class LoginPage extends React.Component {
 
   sendPopupData(message, redirectUri) {
     const params = new URLSearchParams(this.props.location.search);
-    if (params.get("popup") === "1") {
+    const popup = params.get("popup");
+    const popupType = params.get("popup_type") || "window";
+    if (popup !== "1") {
+      return;
+    }
+
+    if (popupType === "iframe") {
+      window.parent.postMessage(message, redirectUri);
+    } else {
       window.opener.postMessage(message, redirectUri);
     }
   }
@@ -386,7 +394,10 @@ class LoginPage extends React.Component {
           }, 1000);
         }
       } else {
-        Setting.goToLink(redirectUrl);
+        const popupType = new URLSearchParams(this.props.location.search).get("popup_type") || "window";
+        if (popupType !== "iframe") {
+          Setting.goToLink(redirectUrl);
+        }
         this.sendPopupData({type: "loginSuccess", data: {code: code, state: oAuthParams.state}}, oAuthParams.redirectUri);
       }
     }
