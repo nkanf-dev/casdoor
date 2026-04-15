@@ -333,7 +333,7 @@ class LoginPage extends React.Component {
     }
 
     if (popupType === "iframe") {
-      window.parent.postMessage(message, redirectUri);
+      window.parent.postMessage(message, new URL(redirectUri).origin);
     } else {
       window.opener.postMessage(message, redirectUri);
     }
@@ -394,8 +394,11 @@ class LoginPage extends React.Component {
           }, 1000);
         }
       } else {
-        const popupType = new URLSearchParams(this.props.location.search).get("popup_type") || "window";
-        if (popupType !== "iframe") {
+        const params = new URLSearchParams(this.props.location.search);
+        const popupType = params.get("popup_type") || "window";
+        const popup = params.get("popup");
+        const isIframePopup = popup === "1" && popupType === "iframe";
+        if (!isIframePopup) {
           Setting.goToLink(redirectUrl);
         }
         this.sendPopupData({type: "loginSuccess", data: {code: code, state: oAuthParams.state}}, oAuthParams.redirectUri);
