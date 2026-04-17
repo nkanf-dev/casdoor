@@ -171,7 +171,7 @@ class DeviceLoginPanel extends React.Component {
           size={230}
         />
         <Button type="link" onClick={() => this.startDeviceLogin()}>
-          {i18next.t("login:Refresh")}
+          {i18next.t("general:Refresh")}
         </Button>
       </div>
     );
