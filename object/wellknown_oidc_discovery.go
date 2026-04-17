@@ -19,6 +19,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"net"
+	"net/url"
 	"strings"
 
 	"github.com/casdoor/casdoor/conf"
@@ -278,7 +279,7 @@ func GetDeviceAuthResponse(deviceCode string, userCode string, cancelToken strin
 	return DeviceAuthResponse{
 		DeviceCode:      deviceCode,
 		UserCode:        userCode,
-		VerificationUri: fmt.Sprintf("%s/login/oauth/device/%s?cancelToken=%s", originFrontend, userCode, cancelToken),
+		VerificationUri: fmt.Sprintf("%s/login/oauth/device/%s?cancelToken=%s", originFrontend, userCode, url.QueryEscape(cancelToken)),
 		ExpiresIn:       DeviceAuthExpiresIn,
 		Interval:        DeviceAuthInterval,
 	}

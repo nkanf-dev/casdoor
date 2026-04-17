@@ -81,17 +81,9 @@ class SigninMethodTable extends React.Component {
         dataIndex: "name",
         key: "name",
         render: (text, record, index) => {
-          const getItemDisplayName = (text) => {
-            const item = items.filter(item => item.name === text);
-            if (item.length === 0) {
-              return "";
-            }
-            return item[0].displayName;
-          };
-
           return (
             <Select virtual={false} style={{width: "100%"}}
-              value={getItemDisplayName(text)}
+              value={text}
               onChange={value => {
                 this.updateField(table, index, "name", value);
                 this.updateField(table, index, "displayName", value);
