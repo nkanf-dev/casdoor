@@ -809,6 +809,15 @@
     "WeChat": "微信",
     "WebAuthn": "ウェブオーセン",
     "sign up now": "今すぐサインアップ",
+    "Approve and sign in": "承認してサインイン",
+    "Approve sign-in on this device": "このデバイスでのサインインを承認",
+    "Confirmation code": "確認コード",
+    "Continue with your current account to approve this sign-in": "現在のアカウントで続行して、このサインインを承認します",
+    "Device login": "デバイスログイン",
+    "Device login expired": "デバイスログインの有効期限が切れました",
+    "Device login is unavailable": "デバイスログインは現在利用できません",
+    "Device login was canceled": "デバイスログインはキャンセルされました",
+    "Scan this QR code with a signed-in device to continue": "サインイン済みのデバイスでこの QR コードをスキャンして続行してください",
     "username, Email or phone": "ユーザー名、メールアドレス、または電話番号"
   },
   "mfa": {

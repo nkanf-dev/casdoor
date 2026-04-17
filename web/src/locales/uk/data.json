@@ -809,6 +809,15 @@
     "WeChat": "Вейчат",
     "WebAuthn": "Вхід WebAuthn",
     "sign up now": "Зареєструйся зараз",
+    "Approve and sign in": "Підтвердити і увійти",
+    "Approve sign-in on this device": "Підтвердити вхід на цьому пристрої",
+    "Confirmation code": "Код підтвердження",
+    "Continue with your current account to approve this sign-in": "Продовжте з поточним акаунтом, щоб підтвердити цей вхід",
+    "Device login": "Вхід через пристрій",
+    "Device login expired": "Термін дії входу через пристрій минув",
+    "Device login is unavailable": "Вхід через пристрій наразі недоступний",
+    "Device login was canceled": "Вхід через пристрій скасовано",
+    "Scan this QR code with a signed-in device to continue": "Скануйте цей QR-код пристроєм із уже активною сесією, щоб продовжити",
     "username, Email or phone": "ім'я користувача, електронну пошту або телефон"
   },
   "mfa": {

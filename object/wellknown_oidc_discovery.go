@@ -272,13 +272,14 @@ func GetWebFinger(resource string, rels []string, host string, applicationName s
 	return wf, nil
 }
 
-func GetDeviceAuthResponse(deviceCode string, userCode string, host string) DeviceAuthResponse {
+func GetDeviceAuthResponse(deviceCode string, userCode string, cancelToken string, host string) DeviceAuthResponse {
 	originFrontend, _ := getOriginFromHost(host)
 
 	return DeviceAuthResponse{
 		DeviceCode:      deviceCode,
 		UserCode:        userCode,
-		VerificationUri: fmt.Sprintf("%s/login/oauth/device/%s", originFrontend, userCode),
-		ExpiresIn:       120,
+		VerificationUri: fmt.Sprintf("%s/login/oauth/device/%s?cancelToken=%s", originFrontend, userCode, cancelToken),
+		ExpiresIn:       DeviceAuthExpiresIn,
+		Interval:        DeviceAuthInterval,
 	}
 }

@@ -809,6 +809,15 @@
     "WeChat": "Đăng nhập WeChat",
     "WebAuthn": "Xác thực WebAuthn",
     "sign up now": "Đăng ký ngay bây giờ",
+    "Approve and sign in": "Phê duyệt và đăng nhập",
+    "Approve sign-in on this device": "Phê duyệt đăng nhập trên thiết bị này",
+    "Confirmation code": "Mã xác nhận",
+    "Continue with your current account to approve this sign-in": "Tiếp tục bằng tài khoản hiện tại để phê duyệt lần đăng nhập này",
+    "Device login": "Đăng nhập bằng thiết bị",
+    "Device login expired": "Đăng nhập bằng thiết bị đã hết hạn",
+    "Device login is unavailable": "Đăng nhập bằng thiết bị hiện không khả dụng",
+    "Device login was canceled": "Đăng nhập bằng thiết bị đã bị hủy",
+    "Scan this QR code with a signed-in device to continue": "Quét mã QR này bằng thiết bị đã đăng nhập để tiếp tục",
     "username, Email or phone": "Tên đăng nhập, Email hoặc điện thoại"
   },
   "mfa": {

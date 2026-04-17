@@ -39,6 +39,13 @@ const (
 	UnsupportedGrantType = "unsupported_grant_type"
 	InvalidScope         = "invalid_scope"
 	EndpointError        = "endpoint_error"
+	DeviceAuthExpiresIn  = 120
+	DeviceAuthInterval   = 5
+
+	DeviceAuthStatusPending     = "pending"
+	DeviceAuthStatusApproved    = "approved"
+	DeviceAuthStatusDenied      = "denied"
+	DeviceAuthStatusTokenIssued = "token_issued"
 )
 
 var DeviceAuthMap = sync.Map{}
@@ -87,8 +94,11 @@ type DeviceAuthCache struct {
 	UserSignIn    bool
 	UserName      string
 	ApplicationId string
+	ClientId      string
 	Scope         string
 	RequestAt     time.Time
+	Status        string
+	CancelToken   string
 }
 
 type DeviceAuthResponse struct {

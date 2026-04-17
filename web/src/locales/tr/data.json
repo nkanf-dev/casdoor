@@ -809,6 +809,15 @@
     "WeChat": "WeChat oturumu",
     "WebAuthn": "WebAuthn kimlik doğrulama",
     "sign up now": "hemen kaydolun",
+    "Approve and sign in": "Onayla ve oturum aç",
+    "Approve sign-in on this device": "Bu cihazda oturum açmayı onayla",
+    "Confirmation code": "Onay kodu",
+    "Continue with your current account to approve this sign-in": "Bu oturum açmayı onaylamak için mevcut hesabınızla devam edin",
+    "Device login": "Cihaz girişi",
+    "Device login expired": "Cihaz girişi süresi doldu",
+    "Device login is unavailable": "Cihaz girişi şu anda kullanılamıyor",
+    "Device login was canceled": "Cihaz girişi iptal edildi",
+    "Scan this QR code with a signed-in device to continue": "Devam etmek için oturum açmış bir cihazla bu QR kodunu tarayın",
     "username, Email or phone": "kullanıcı adınız, Eposta adresiniz ve telefon numaranız"
   },
   "mfa": {

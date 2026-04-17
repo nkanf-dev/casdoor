@@ -809,6 +809,15 @@
     "WeChat": "Início de sessão WeChat",
     "WebAuthn": "Autenticação WebAuthn",
     "sign up now": "Inscreva-se agora",
+    "Approve and sign in": "Aprovar e entrar",
+    "Approve sign-in on this device": "Aprovar login neste dispositivo",
+    "Confirmation code": "Código de confirmação",
+    "Continue with your current account to approve this sign-in": "Continue com sua conta atual para aprovar este login",
+    "Device login": "Login por dispositivo",
+    "Device login expired": "O login por dispositivo expirou",
+    "Device login is unavailable": "O login por dispositivo está indisponível",
+    "Device login was canceled": "O login por dispositivo foi cancelado",
+    "Scan this QR code with a signed-in device to continue": "Escaneie este QR code com um dispositivo já autenticado para continuar",
     "username, Email or phone": "Nome de usuário, email ou telefone"
   },
   "mfa": {
