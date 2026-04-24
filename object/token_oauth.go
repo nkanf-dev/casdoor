@@ -23,7 +23,7 @@ import (
 	"github.com/casdoor/casdoor/util"
 )
 
-func GetOAuthToken(grantType string, clientId string, clientSecret string, code string, verifier string, scope string, nonce string, username string, password string, host string, refreshToken string, tag string, avatar string, lang string, subjectToken string, subjectTokenType string, assertion string, clientAssertion string, clientAssertionType string, audience string, resource string, dpopProof string) (interface{}, error) {
+func GetOAuthToken(grantType string, clientId string, clientSecret string, code string, verifier string, scope string, nonce string, username string, password string, host string, refreshToken string, tag string, avatar string, lang string, subjectToken string, subjectTokenType string, actorToken string, actorTokenType string, requestedTokenType string, assertion string, clientAssertion string, clientAssertionType string, audience string, resource string, dpopProof string) (interface{}, error) {
 	var (
 		application *Application
 		err         error
@@ -71,7 +71,7 @@ func GetOAuthToken(grantType string, clientId string, clientSecret string, code 
 		return token, nil
 	}
 
-	// Check if grantType is allowed in the current application
+	// Check if grantType is allowed in the current application.
 	if !IsGrantTypeValid(grantType, application.GrantTypes) {
 		return &TokenError{
 			Error:            UnsupportedGrantType,
@@ -96,8 +96,8 @@ func GetOAuthToken(grantType string, clientId string, clientSecret string, code 
 		// The user has already authenticated via browser in the device flow,
 		// so we skip password verification and mint a token directly.
 		token, tokenError, err = mintImplicitToken(application, username, scope, nonce, host)
-	case "urn:ietf:params:oauth:grant-type:token-exchange": // Token Exchange Grant (RFC 8693)
-		token, tokenError, err = GetTokenExchangeToken(application, clientSecret, subjectToken, subjectTokenType, audience, scope, host)
+	case TokenExchangeGrantType: // Token Exchange Grant (RFC 8693)
+		token, tokenError, err = GetTokenExchangeToken(application, clientSecret, subjectToken, subjectTokenType, actorToken, actorTokenType, audience, scope, host)
 	case "refresh_token":
 		refreshToken2, err := RefreshToken(application, grantType, refreshToken, scope, clientId, clientSecret, host, dpopProof)
 		if err != nil {
@@ -112,6 +112,12 @@ func GetOAuthToken(grantType string, clientId string, clientSecret string, code 
 
 	if tokenError != nil {
 		return tokenError, nil
+	}
+
+	var deviceSecret string
+	if grantType == "authorization_code" && IsNativeSsoScope(token.Scope) {
+		deviceSecret = newDeviceSecret()
+		attachDeviceSecret(token, deviceSecret)
 	}
 
 	// Apply DPoP binding (RFC 9449) if a DPoP proof was supplied by the client.
@@ -145,6 +151,7 @@ func GetOAuthToken(grantType string, clientId string, clientSecret string, code 
 		TokenType:    token.TokenType,
 		ExpiresIn:    token.ExpiresIn,
 		Scope:        token.Scope,
+		DeviceSecret: deviceSecret,
 	}
 
 	return tokenWrapper, nil
@@ -598,7 +605,11 @@ func GetWechatMiniProgramToken(application *Application, code string, host strin
 
 // GetTokenExchangeToken handles the Token Exchange Grant flow (RFC 8693).
 // Exchanges a subject token for a new token with different audience or scope.
-func GetTokenExchangeToken(application *Application, clientSecret string, subjectToken string, subjectTokenType string, audience string, scope string, host string) (*Token, *TokenError, error) {
+func GetTokenExchangeToken(application *Application, clientSecret string, subjectToken string, subjectTokenType string, actorToken string, actorTokenType string, audience string, scope string, host string) (*Token, *TokenError, error) {
+	if actorTokenType == DeviceSecretTokenType {
+		return GetNativeSsoTokenExchangeToken(application, clientSecret, subjectToken, subjectTokenType, actorToken, actorTokenType, audience, scope, host)
+	}
+
 	if application.ClientSecret != clientSecret {
 		return nil, &TokenError{
 			Error:            InvalidClient,
@@ -728,6 +739,117 @@ func GetTokenExchangeToken(application *Application, clientSecret string, subjec
 		return nil, nil, err
 	}
 
+	return token, nil, nil
+}
+
+func GetNativeSsoTokenExchangeToken(application *Application, clientSecret string, subjectToken string, subjectTokenType string, actorToken string, actorTokenType string, audience string, scope string, host string) (*Token, *TokenError, error) {
+	if clientSecret != "" && application.ClientSecret != clientSecret {
+		return nil, &TokenError{Error: InvalidClient, ErrorDescription: "client_secret is invalid"}, nil
+	}
+	if subjectToken == "" {
+		return nil, &TokenError{Error: InvalidRequest, ErrorDescription: "subject_token is required"}, nil
+	}
+	if subjectTokenType != AccessTokenType {
+		return nil, &TokenError{Error: InvalidRequest, ErrorDescription: fmt.Sprintf("unsupported subject_token_type for native sso: %s", subjectTokenType)}, nil
+	}
+	if actorToken == "" {
+		return nil, &TokenError{Error: InvalidRequest, ErrorDescription: "actor_token is required"}, nil
+	}
+	if actorTokenType != DeviceSecretTokenType {
+		return nil, &TokenError{Error: InvalidRequest, ErrorDescription: fmt.Sprintf("unsupported actor_token_type: %s", actorTokenType)}, nil
+	}
+
+	deviceToken, err := GetTokenByDeviceSecret(actorToken)
+	if err != nil {
+		return nil, nil, err
+	}
+	if deviceToken == nil || deviceToken.DeviceSecretExpiresIn <= 0 {
+		return nil, &TokenError{Error: InvalidGrant, ErrorDescription: "device_secret is invalid"}, nil
+	}
+	if expired, _ := util.IsTokenExpired(deviceToken.CreatedTime, deviceToken.DeviceSecretExpiresIn); expired {
+		return nil, &TokenError{Error: InvalidGrant, ErrorDescription: "device_secret is expired"}, nil
+	}
+	subjectTokenRecord, err := GetTokenByAccessToken(subjectToken)
+	if err != nil {
+		return nil, nil, err
+	}
+	if subjectTokenRecord == nil || subjectTokenRecord.GetId() != deviceToken.GetId() {
+		return nil, &TokenError{Error: InvalidGrant, ErrorDescription: "subject_token is not bound to device_secret"}, nil
+	}
+	if expired, _ := util.IsTokenExpired(subjectTokenRecord.CreatedTime, subjectTokenRecord.ExpiresIn); expired {
+		return nil, &TokenError{Error: InvalidGrant, ErrorDescription: "subject_token is expired"}, nil
+	}
+	if clientSecret == "" {
+		deviceApplication, err := getApplication(deviceToken.Owner, deviceToken.Application)
+		if err != nil {
+			return nil, nil, err
+		}
+		if deviceApplication == nil || deviceApplication.Organization != application.Organization {
+			return nil, &TokenError{Error: InvalidClient, ErrorDescription: "client_secret is required for native sso across organizations"}, nil
+		}
+	}
+
+	if deviceToken.Organization != subjectTokenRecord.Organization || deviceToken.User != subjectTokenRecord.User {
+		return nil, &TokenError{Error: InvalidGrant, ErrorDescription: "subject_token is not bound to device_secret"}, nil
+	}
+
+	if scope == "" {
+		scope = removeOAuthScope(deviceToken.Scope, DeviceSsoScope)
+	}
+	return mintNativeSsoToken(application, subjectTokenRecord.Organization, subjectTokenRecord.User, scope, host)
+}
+
+func removeOAuthScope(scope string, target string) string {
+	items := []string{}
+	for _, item := range strings.Fields(scope) {
+		if item != target {
+			items = append(items, item)
+		}
+	}
+	return strings.Join(items, " ")
+}
+
+func mintNativeSsoToken(application *Application, owner string, name string, scope string, host string) (*Token, *TokenError, error) {
+	user, err := getUser(owner, name)
+	if err != nil {
+		return nil, nil, err
+	}
+	if user == nil {
+		return nil, &TokenError{Error: InvalidGrant, ErrorDescription: fmt.Sprintf("user from subject_token does not exist: %s", util.GetId(owner, name))}, nil
+	}
+	if user.IsForbidden {
+		return nil, &TokenError{Error: InvalidGrant, ErrorDescription: "the user is forbidden to sign in, please contact the administrator"}, nil
+	}
+	if !IsScopeValid(scope, application) {
+		return nil, &TokenError{Error: InvalidScope, ErrorDescription: "invalid scope"}, nil
+	}
+	if err = ExtendUserWithRolesAndPermissions(user); err != nil {
+		return nil, nil, err
+	}
+
+	accessToken, refreshToken, tokenName, err := generateJwtToken(application, user, "", "", "", scope, "", host)
+	if err != nil {
+		return nil, &TokenError{Error: EndpointError, ErrorDescription: fmt.Sprintf("generate jwt token error: %s", err.Error())}, nil
+	}
+	token := &Token{
+		Owner:        application.Owner,
+		Name:         tokenName,
+		CreatedTime:  util.GetCurrentTime(),
+		Application:  application.Name,
+		Organization: user.Owner,
+		User:         user.Name,
+		Code:         util.GenerateClientId(),
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		ExpiresIn:    int(application.ExpireInHours * float64(hourSeconds)),
+		Scope:        scope,
+		TokenType:    "Bearer",
+		GrantType:    TokenExchangeGrantType,
+		CodeIsUsed:   true,
+	}
+	if _, err = AddToken(token); err != nil {
+		return nil, nil, err
+	}
 	return token, nil, nil
 }
 

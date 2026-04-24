@@ -1678,3 +1678,70 @@ func (c *ApiController) DeviceAuthComplete() {
 	c.Data["json"] = resp
 	c.ServeJSON()
 }
+
+// NativeSsoComplete
+// @Title NativeSsoComplete
+// @Tag Native SSO
+// @Description Complete OAuth authorization after Native SSO token exchange
+// @router /native-sso-complete [post]
+func (c *ApiController) NativeSsoComplete() {
+	var request struct {
+		AccessToken string `json:"accessToken"`
+	}
+	if err := json.Unmarshal(c.Ctx.Input.RequestBody, &request); err != nil {
+		c.ResponseError(err.Error())
+		return
+	}
+
+	token, err := object.GetTokenByAccessToken(request.AccessToken)
+	if err != nil {
+		c.ResponseError(err.Error())
+		return
+	}
+	if token == nil {
+		c.ResponseError(c.T("token:Token not found, invalid accessToken"))
+		return
+	}
+	if expired, _ := util.IsTokenExpired(token.CreatedTime, token.ExpiresIn); expired {
+		c.ResponseError(c.T("token:Token expired"))
+		return
+	}
+	if token.GrantType != object.TokenExchangeGrantType {
+		c.ResponseError(c.T("auth:The access token was not issued by native SSO"))
+		return
+	}
+
+	application, err := object.GetApplicationByClientId(c.Ctx.Input.Query("clientId"))
+	if err != nil {
+		c.ResponseError(err.Error())
+		return
+	}
+	if application == nil || application.Owner != token.Owner || application.Name != token.Application {
+		c.ResponseError(c.T("auth:The application does not match the native SSO token"))
+		return
+	}
+
+	user, err := object.GetUser(util.GetId(token.Organization, token.User))
+	if err != nil {
+		c.ResponseError(err.Error())
+		return
+	}
+	if user == nil {
+		c.ResponseError(fmt.Sprintf(c.T("general:The user: %s doesn't exist"), util.GetId(token.Organization, token.User)))
+		return
+	}
+
+	responseType := c.Ctx.Input.Query("responseType")
+	if responseType == "" {
+		responseType = ResponseTypeLogin
+	}
+	authForm := form.AuthForm{
+		Type:         responseType,
+		SigninMethod: "Native SSO",
+	}
+	resp := c.HandleLoggedIn(application, user, &authForm)
+
+	c.Ctx.Input.SetParam("recordUserId", user.GetId())
+	c.Data["json"] = resp
+	c.ServeJSON()
+}
