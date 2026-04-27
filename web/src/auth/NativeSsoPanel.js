@@ -14,6 +14,7 @@
 
 import React from "react";
 import {Avatar, Button, Typography} from "antd";
+import i18next from "i18next";
 import * as Setting from "../Setting";
 import * as Util from "./Util";
 
@@ -21,7 +22,7 @@ const nativeSsoCandidatePorts = [47321, 47322, 47323, 47324, 47325];
 const nativeSsoStatusPath = "/native-sso/status";
 const nativeSsoAuthorizePath = "/native-sso/authorize";
 
-class QuickLoginPanel extends React.Component {
+class NativeSsoPanel extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
@@ -182,13 +183,13 @@ class QuickLoginPanel extends React.Component {
       });
 
       if (result?.status !== "approved") {
-        this.fallbackToPasswordLogin(result?.message || result?.msg || "Quick login was denied");
+        this.fallbackToPasswordLogin(result?.message || result?.msg || i18next.t("login:Native SSO was denied"));
         return;
       }
 
       this.props.onSuccess?.(result);
     } catch (error) {
-      this.fallbackToPasswordLogin(error.message || "Quick login was denied");
+      this.fallbackToPasswordLogin(error.message || i18next.t("login:Native SSO was denied"));
     }
   }
 
@@ -218,9 +219,9 @@ class QuickLoginPanel extends React.Component {
       <div style={{width: 320, margin: "0 auto", textAlign: "center"}}>
         <div style={{marginBottom: 12}}>
           <Typography.Title level={4} style={{marginBottom: 8}}>
-            {"Quick login"}
+            {i18next.t("login:Native SSO")}
           </Typography.Title>
-          <Typography.Text>{`Signed in on this device with ${appName}`}</Typography.Text>
+          <Typography.Text>{i18next.t("login:Signed in on this device with {app}").replace("{app}", appName)}</Typography.Text>
         </div>
         <div style={{border: "1px solid #f0f0f0", borderRadius: 8, padding: 24, background: "#fafafa"}}>
           <Avatar src={agentAvatar || undefined} size={72} style={{marginBottom: 12}}>
@@ -232,16 +233,16 @@ class QuickLoginPanel extends React.Component {
             </div>
           ) : null}
           <Typography.Text type="secondary">
-            {"Quick login is ready"}
+            {i18next.t("login:Native SSO is ready")}
           </Typography.Text>
           <div style={{marginTop: 20}}>
             <Button type="primary" size="large" block onClick={() => this.authorizeNativeSso()} disabled={authorizing}>
-              {"Quick login"}
+              {i18next.t("login:Native SSO")}
             </Button>
           </div>
           <div style={{marginTop: 12}}>
             <Button type="link" onClick={() => this.useOtherLoginMethods()}>
-              {"Use other login methods"}
+              {i18next.t("login:Use other login methods")}
             </Button>
           </div>
         </div>
@@ -255,4 +256,4 @@ class QuickLoginPanel extends React.Component {
   }
 }
 
-export default QuickLoginPanel;
+export default NativeSsoPanel;

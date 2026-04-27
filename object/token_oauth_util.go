@@ -41,12 +41,6 @@ const (
 	EndpointError        = "endpoint_error"
 	DeviceAuthExpiresIn  = 120
 	DeviceAuthInterval   = 5
-	DeviceSsoScope       = "device_sso"
-
-	TokenExchangeGrantType = "urn:ietf:params:oauth:grant-type:token-exchange"
-	AccessTokenType        = "urn:ietf:params:oauth:token-type:access_token"
-	IdTokenType            = "urn:ietf:params:oauth:token-type:id_token"
-	DeviceSecretTokenType  = "urn:openid:params:token-type:device-secret"
 
 	DeviceAuthStatusPending     = "pending"
 	DeviceAuthStatusApproved    = "approved"
@@ -178,41 +172,6 @@ func IsGrantTypeValid(method string, grantTypes []string) bool {
 	return false
 }
 
-func IsNativeSsoTokenExchangeRequest(grantType string, actorToken string, actorTokenType string) bool {
-	return grantType == TokenExchangeGrantType && actorToken != "" && actorTokenType == DeviceSecretTokenType
-}
-
-func HasOAuthScope(scope string, target string) bool {
-	for _, item := range strings.Fields(scope) {
-		if item == target {
-			return true
-		}
-	}
-	return false
-}
-
-func IsNativeSsoScope(scope string) bool {
-	return HasOAuthScope(scope, DeviceSsoScope)
-}
-
-func IsBuiltInOAuthScope(scope string) bool {
-	switch scope {
-	case DeviceSsoScope:
-		return true
-	default:
-		return false
-	}
-}
-
-func newDeviceSecret() string {
-	return util.GenerateClientSecret()
-}
-
-func attachDeviceSecret(token *Token, deviceSecret string) {
-	token.DeviceSecretHash = getTokenHash(deviceSecret)
-	token.DeviceSecretExpiresIn = token.ExpiresIn
-}
-
 // isRegexScope returns true if the scope string contains regex metacharacters.
 func isRegexScope(scope string) bool {
 	return strings.ContainsAny(scope, ".*+?^${}()|[]\\")
@@ -241,7 +200,7 @@ func IsScopeValidAndExpand(scope string, application *Application) (string, bool
 	var expanded []string
 
 	for _, s := range strings.Fields(scope) {
-		if IsBuiltInOAuthScope(s) {
+		if s == "device_sso" {
 			if !seen[s] {
 				seen[s] = true
 				expanded = append(expanded, s)
@@ -739,7 +698,7 @@ func parseAndValidateSubjectToken(subjectToken string, requestingClientId string
 
 	// Audience binding: requesting client must be the issuer itself or appear in token's aud.
 	// Prevents an attacker from exchanging App A's token to obtain an App B token (RFC 8693 §2.1).
-	if requestingClientId != "" && issuingApp.ClientId != requestingClientId {
+	if issuingApp.ClientId != requestingClientId {
 		audienceMatched := false
 		for _, aud := range claims.Audience {
 			if aud == requestingClientId {

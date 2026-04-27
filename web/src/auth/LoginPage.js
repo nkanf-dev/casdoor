@@ -41,7 +41,7 @@ import * as ProviderButton from "./ProviderButton";
 import {createFormAndSubmit, goToLink} from "../Setting";
 import WeChatLoginPanel from "./WeChatLoginPanel";
 import DeviceLoginPanel from "./DeviceLoginPanel";
-import QuickLoginPanel from "./QuickLoginPanel";
+import NativeSsoPanel from "./NativeSsoPanel";
 import {CountryCodeSelect} from "../common/select/CountryCodeSelect";
 const FaceRecognitionCommonModal = lazy(() => import("../common/modal/FaceRecognitionCommonModal"));
 const FaceRecognitionModal = lazy(() => import("../common/modal/FaceRecognitionModal"));
@@ -75,14 +75,14 @@ class LoginPage extends React.Component {
       userCode: props.userCode ?? (props.match?.params?.userCode ?? null),
       userCodeStatus: "",
       prefilledUsername: urlParams.get("username") || urlParams.get("login_hint"),
-      quickLoginActive: false,
-      quickLoginSuppressed: false,
-      quickLoginFallbackVisible: false,
-      quickLoginKnownAgent: null,
-      quickLoginRestartKey: 0,
-      quickLoginOverlay: "",
+      nativeSsoActive: false,
+      nativeSsoSuppressed: false,
+      nativeSsoFallbackVisible: false,
+      nativeSsoKnownAgent: null,
+      nativeSsoRestartKey: 0,
+      nativeSsoOverlay: "",
     };
-    this.quickLoginOverlayTimer = null;
+    this.nativeSsoOverlayTimer = null;
 
     if (this.state.type === "cas" && props.match?.params.casApplicationName !== undefined) {
       this.state.owner = props.match?.params?.owner;
@@ -96,9 +96,9 @@ class LoginPage extends React.Component {
   }
 
   componentWillUnmount() {
-    if (this.quickLoginOverlayTimer !== null) {
-      clearTimeout(this.quickLoginOverlayTimer);
-      this.quickLoginOverlayTimer = null;
+    if (this.nativeSsoOverlayTimer !== null) {
+      clearTimeout(this.nativeSsoOverlayTimer);
+      this.nativeSsoOverlayTimer = null;
     }
   }
 
@@ -550,29 +550,63 @@ class LoginPage extends React.Component {
       AuthBackend.login(values, oAuthParams)
         .then((res) => {
           const loginHandler = (res) => {
-            if (!this.handleOAuthLoginResponse(res, values["type"], oAuthParams)) {
-              const responseType = values["type"];
-              if (responseType === "saml") {
-                if (res.data === RequiredMfa) {
-                  this.props.onLoginSuccess(window.location.href);
-                  return;
-                }
-                if (res.data3) {
-                  sessionStorage.setItem("signinUrl", window.location.pathname + window.location.search);
-                  Setting.goToLinkSoft(this, "/account");
-                  return;
-                }
-                if (res.data2.method === "POST") {
-                  this.setState({
-                    samlResponse: res.data,
-                    redirectUrl: res.data2.redirectUrl,
-                    relayState: oAuthParams.relayState,
-                  });
-                } else {
-                  const SAMLResponse = res.data;
-                  const redirectUri = res.data2.redirectUrl;
-                  Setting.goToLink(`${redirectUri}${redirectUri.includes("?") ? "&" : "?"}SAMLResponse=${encodeURIComponent(SAMLResponse)}&RelayState=${encodeURIComponent(oAuthParams.relayState)}`);
-                }
+            const responseType = values["type"];
+            const responseTypes = responseType.split(" ");
+            const responseMode = oAuthParams?.responseMode || "query";
+            if (responseType === "login") {
+              if (res.data3) {
+                sessionStorage.setItem("signinUrl", window.location.pathname + window.location.search);
+                Setting.goToLinkSoft(this, "/account");
+                return;
+              }
+              Setting.showMessage("success", i18next.t("application:Logged in successfully"));
+              this.props.onLoginSuccess();
+            } else if (responseType === "code") {
+              this.postCodeLoginAction(res);
+            } else if (responseType === "device") {
+              Setting.showMessage("success", i18next.t("application:Logged in successfully"));
+              this.setState({
+                userCodeStatus: "success",
+              });
+            } else if (responseTypes.includes("token") || responseTypes.includes("id_token")) {
+              if (res.data3) {
+                sessionStorage.setItem("signinUrl", window.location.pathname + window.location.search);
+                Setting.goToLinkSoft(this, "/account");
+                return;
+              }
+              const amendatoryResponseType = responseType === "token" ? "access_token" : responseType;
+              const accessToken = res.data;
+              if (responseMode === "form_post") {
+                const params = {
+                  token: responseTypes.includes("token") ? res.data : null,
+                  id_token: responseTypes.includes("id_token") ? res.data : null,
+                  token_type: "bearer",
+                  state: oAuthParams?.state,
+                };
+                createFormAndSubmit(oAuthParams?.redirectUri, params);
+              } else {
+                Setting.goToLink(`${oAuthParams.redirectUri}#${amendatoryResponseType}=${accessToken}&state=${oAuthParams.state}&token_type=bearer`);
+              }
+            } else if (responseType === "saml") {
+              if (res.data === RequiredMfa) {
+                this.props.onLoginSuccess(window.location.href);
+                return;
+              }
+              if (res.data3) {
+                sessionStorage.setItem("signinUrl", window.location.pathname + window.location.search);
+                Setting.goToLinkSoft(this, "/account");
+                return;
+              }
+              if (res.data2.method === "POST") {
+                this.setState({
+                  samlResponse: res.data,
+                  redirectUrl: res.data2.redirectUrl,
+                  relayState: oAuthParams.relayState,
+                });
+              } else {
+                const SAMLResponse = res.data;
+                const redirectUri = res.data2.redirectUrl;
+                Setting.goToLink(`${redirectUri}${redirectUri.includes("?") ? "&" : "?"}SAMLResponse=${encodeURIComponent(SAMLResponse)}&RelayState=${encodeURIComponent(oAuthParams.relayState)}`);
               }
             }
           };
@@ -590,51 +624,6 @@ class LoginPage extends React.Component {
           this.setState({loginLoading: false});
         });
     }
-  }
-
-  handleOAuthLoginResponse(res, responseType, oAuthParams) {
-    const responseTypes = responseType.split(" ");
-    const responseMode = oAuthParams?.responseMode || "query";
-    if (responseType === "login") {
-      if (res.data3) {
-        sessionStorage.setItem("signinUrl", window.location.pathname + window.location.search);
-        Setting.goToLinkSoft(this, "/account");
-        return true;
-      }
-      Setting.showMessage("success", i18next.t("application:Logged in successfully"));
-      this.props.onLoginSuccess();
-      return true;
-    } else if (responseType === "code") {
-      this.postCodeLoginAction(res);
-      return true;
-    } else if (responseType === "device") {
-      Setting.showMessage("success", i18next.t("application:Logged in successfully"));
-      this.setState({
-        userCodeStatus: "success",
-      });
-      return true;
-    } else if (responseTypes.includes("token") || responseTypes.includes("id_token")) {
-      if (res.data3) {
-        sessionStorage.setItem("signinUrl", window.location.pathname + window.location.search);
-        Setting.goToLinkSoft(this, "/account");
-        return true;
-      }
-      const amendatoryResponseType = responseType === "token" ? "access_token" : responseType;
-      const accessToken = res.data;
-      if (responseMode === "form_post") {
-        const params = {
-          token: responseTypes.includes("token") ? res.data : null,
-          id_token: responseTypes.includes("id_token") ? res.data : null,
-          token_type: "bearer",
-          state: oAuthParams?.state,
-        };
-        createFormAndSubmit(oAuthParams?.redirectUri, params);
-      } else {
-        Setting.goToLink(`${oAuthParams.redirectUri}#${amendatoryResponseType}=${accessToken}&state=${oAuthParams.state}&token_type=bearer`);
-      }
-      return true;
-    }
-    return false;
   }
 
   isProviderVisible(providerItem) {
@@ -935,7 +924,7 @@ class LoginPage extends React.Component {
                     signinItem.label ? signinItem.label : i18next.t("login:Sign In")
             }
           </Button>
-          {this.renderQuickLoginFallbackLink()}
+          {this.renderNativeSsoFallbackLink()}
           {
             this.state.type === "device" ? (
               <Button
@@ -1258,73 +1247,112 @@ class LoginPage extends React.Component {
     }
   }
 
-  showQuickLoginOverlay(messageText) {
-    if (this.quickLoginOverlayTimer !== null) {
-      clearTimeout(this.quickLoginOverlayTimer);
-      this.quickLoginOverlayTimer = null;
+  showNativeSsoOverlay(messageText) {
+    if (this.nativeSsoOverlayTimer !== null) {
+      clearTimeout(this.nativeSsoOverlayTimer);
+      this.nativeSsoOverlayTimer = null;
     }
 
-    this.setState({quickLoginOverlay: messageText});
-    this.quickLoginOverlayTimer = setTimeout(() => {
-      this.setState({quickLoginOverlay: ""});
-      this.quickLoginOverlayTimer = null;
+    this.setState({nativeSsoOverlay: messageText});
+    this.nativeSsoOverlayTimer = setTimeout(() => {
+      this.setState({nativeSsoOverlay: ""});
+      this.nativeSsoOverlayTimer = null;
     }, 2200);
   }
 
-  handleQuickLoginFallback(messageText, agent) {
+  handleNativeSsoFallback(messageText, agent) {
     this.setState({
-      quickLoginActive: false,
-      quickLoginSuppressed: true,
-      quickLoginFallbackVisible: true,
-      quickLoginKnownAgent: agent || this.state.quickLoginKnownAgent,
+      nativeSsoActive: false,
+      nativeSsoSuppressed: true,
+      nativeSsoFallbackVisible: true,
+      nativeSsoKnownAgent: agent || this.state.nativeSsoKnownAgent,
     });
 
     if (messageText) {
-      this.showQuickLoginOverlay(messageText);
+      this.showNativeSsoOverlay(messageText);
     }
   }
 
-  retryQuickLogin() {
+  retryNativeSso() {
     this.setState((prevState) => ({
-      quickLoginSuppressed: false,
-      quickLoginFallbackVisible: true,
-      quickLoginRestartKey: prevState.quickLoginRestartKey + 1,
+      nativeSsoSuppressed: false,
+      nativeSsoFallbackVisible: true,
+      nativeSsoRestartKey: prevState.nativeSsoRestartKey + 1,
     }));
   }
 
   handleNativeSsoSuccess(result) {
     const accessToken = result?.accessToken || result?.token?.access_token || "";
     if (accessToken === "") {
-      this.handleQuickLoginFallback("Invalid quick login response");
+      this.handleNativeSsoFallback(i18next.t("login:Invalid Native SSO response"));
       return;
     }
 
     const oAuthParams = Util.getOAuthGetParameters();
     AuthBackend.completeNativeSso(accessToken, oAuthParams).then((res) => {
       if (res.status === "ok") {
-        this.handleOAuthLoginResponse(res, oAuthParams?.responseType || "login", oAuthParams);
+        const responseType = oAuthParams?.responseType || "login";
+        const responseTypes = responseType.split(" ");
+        const responseMode = oAuthParams?.responseMode || "query";
+        if (responseType === "login") {
+          if (res.data3) {
+            sessionStorage.setItem("signinUrl", window.location.pathname + window.location.search);
+            Setting.goToLinkSoft(this, "/account");
+            return;
+          }
+          Setting.showMessage("success", i18next.t("application:Logged in successfully"));
+          this.props.onLoginSuccess();
+        } else if (responseType === "code") {
+          this.postCodeLoginAction(res);
+        } else if (responseType === "device") {
+          Setting.showMessage("success", i18next.t("application:Logged in successfully"));
+          this.setState({
+            userCodeStatus: "success",
+          });
+        } else if (responseTypes.includes("token") || responseTypes.includes("id_token")) {
+          if (res.data3) {
+            sessionStorage.setItem("signinUrl", window.location.pathname + window.location.search);
+            Setting.goToLinkSoft(this, "/account");
+            return;
+          }
+          const amendatoryResponseType = responseType === "token" ? "access_token" : responseType;
+          const nativeSsoAccessToken = res.data;
+          if (responseMode === "form_post") {
+            const params = {
+              token: responseTypes.includes("token") ? res.data : null,
+              id_token: responseTypes.includes("id_token") ? res.data : null,
+              token_type: "bearer",
+              state: oAuthParams?.state,
+            };
+            createFormAndSubmit(oAuthParams?.redirectUri, params);
+          } else {
+            Setting.goToLink(`${oAuthParams.redirectUri}#${amendatoryResponseType}=${nativeSsoAccessToken}&state=${oAuthParams.state}&token_type=bearer`);
+          }
+        } else {
+          this.handleNativeSsoFallback(i18next.t("login:Invalid Native SSO response"));
+        }
       } else {
-        this.handleQuickLoginFallback(res.msg || "Quick login was denied");
+        this.handleNativeSsoFallback(res.msg || i18next.t("login:Native SSO was denied"));
       }
     }).catch((error) => {
-      this.handleQuickLoginFallback(error.message || "Quick login was denied");
+      this.handleNativeSsoFallback(error.message || i18next.t("login:Native SSO was denied"));
     });
   }
 
-  renderQuickLoginFallbackLink() {
-    if (!this.state.quickLoginFallbackVisible) {
+  renderNativeSsoFallbackLink() {
+    if (!this.state.nativeSsoFallbackVisible) {
       return null;
     }
 
     return (
       <div style={{marginTop: 20, textAlign: "center", fontSize: 16, lineHeight: "22px"}}>
-        <a onClick={() => this.retryQuickLogin()}>{"Quick login"}</a>
+        <a onClick={() => this.retryNativeSso()}>{i18next.t("login:Native SSO")}</a>
       </div>
     );
   }
 
-  renderQuickLoginOverlay() {
-    if (this.state.quickLoginOverlay === "") {
+  renderNativeSsoOverlay() {
+    if (this.state.nativeSsoOverlay === "") {
       return null;
     }
 
@@ -1354,12 +1382,12 @@ class LoginPage extends React.Component {
         <div style={{fontSize: 58, lineHeight: 1, fontWeight: 200, marginBottom: 34}}>
           {"×"}
         </div>
-        <div>{this.state.quickLoginOverlay}</div>
+        <div>{this.state.nativeSsoOverlay}</div>
       </div>
     );
   }
 
-  shouldRenderQuickLogin(application) {
+  shouldRenderNativeSso(application) {
     return this.state.mode === "signin" && this.state.type !== "device" && application?.clientId;
   }
 
@@ -1842,13 +1870,13 @@ class LoginPage extends React.Component {
       );
     }
 
-    const showQuickLogin = this.shouldRenderQuickLogin(application);
+    const showNativeSso = this.shouldRenderNativeSso(application);
 
     return (
       <React.Fragment>
         <CustomGithubCorner />
         <div className="login-content" style={{margin: this.props.preview ?? this.parseOffset(application.formOffset)}}>
-          {this.renderQuickLoginOverlay()}
+          {this.renderNativeSsoOverlay()}
           {Setting.inIframe() || Setting.isMobile() ? null : <div dangerouslySetInnerHTML={{__html: application.formCss}} />}
           {Setting.inIframe() || !Setting.isMobile() ? null : <div dangerouslySetInnerHTML={{__html: application.formCssMobile}} />}
           <div className={Setting.isDarkTheme(this.props.themeAlgorithm) ? "login-panel-dark" : "login-panel"}>
@@ -1857,21 +1885,21 @@ class LoginPage extends React.Component {
             </div>
             <div className="login-form">
               <div>
-                {showQuickLogin && !this.state.quickLoginSuppressed ? (
-                  <QuickLoginPanel
-                    key={`quick-login-${this.state.quickLoginRestartKey}`}
+                {showNativeSso && !this.state.nativeSsoSuppressed ? (
+                  <NativeSsoPanel
+                    key={`native-sso-${this.state.nativeSsoRestartKey}`}
                     application={application}
-                    restartKey={this.state.quickLoginRestartKey}
-                    initialAgent={this.state.quickLoginKnownAgent}
-                    onActiveChange={(active) => this.setState({quickLoginActive: active})}
-                    onFallback={(messageText, agent) => this.handleQuickLoginFallback(messageText, agent)}
+                    restartKey={this.state.nativeSsoRestartKey}
+                    initialAgent={this.state.nativeSsoKnownAgent}
+                    onActiveChange={(active) => this.setState({nativeSsoActive: active})}
+                    onFallback={(messageText, agent) => this.handleNativeSsoFallback(messageText, agent)}
                     onSuccess={(result) => this.handleNativeSsoSuccess(result)}
                   />
                 ) : null}
-                {showQuickLogin && this.state.quickLoginActive ? null : this.renderLoginPanel(application)}
+                {showNativeSso && this.state.nativeSsoActive ? null : this.renderLoginPanel(application)}
               </div>
             </div>
-            {sidePanels.length > 0 && !(showQuickLogin && this.state.quickLoginActive) ? (
+            {sidePanels.length > 0 && !(showNativeSso && this.state.nativeSsoActive) ? (
               <div style={{display: "flex", justifyContent: "center", alignItems: "center", flexDirection: "column", gap: 24}}>
                 {sidePanels}
               </div>

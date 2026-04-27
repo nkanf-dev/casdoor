@@ -126,23 +126,6 @@ func GetTokenByRefreshToken(refreshToken string) (*Token, error) {
 	return &token, nil
 }
 
-func GetTokenByDeviceSecret(deviceSecret string) (*Token, error) {
-	if deviceSecret == "" {
-		return nil, nil
-	}
-
-	token := Token{DeviceSecretHash: getTokenHash(deviceSecret)}
-	existed, err := ormer.Engine.Get(&token)
-	if err != nil {
-		return nil, err
-	}
-
-	if !existed {
-		return nil, nil
-	}
-	return &token, nil
-}
-
 func GetTokenByTokenValue(tokenValue, tokenTypeHint string) (*Token, error) {
 	switch tokenTypeHint {
 	case "access_token", "access-token":
